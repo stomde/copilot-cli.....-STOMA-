@@ -1,4 +1,172 @@
-# GitHub Copilot CLI (Public Preview)
+/n
+# === Edit only if needed ===
+UPSTREAM_OWNER="Mutigelink"
+UPSTREAM_REPO="copilot-sdk"
+REPO_NAME="${UPSTREAM_REPO}"
+FORK_OWNER="stomde"
+BRANCH="stoma-woken-up"
+# ===========================
+
+# If you haven't forked upstream to your account, fork + clone:
+# gh repo fork "${UPSTREAM_OWNER}/${UPSTREAM_REPO}" --clone --remote=true
+
+# If you've already forked (stomde/${REPO_NAME}), clone the fork instead:
+gh repo clone "${FORK_OWNER}/${REPO_NAME}"
+
+cd "${REPO_NAME}" || { echo "cd failed; check REPO_NAME"; exit 1; }
+
+# Create and switch to branch
+git switch -c "${BRANCH}"
+
+# Create directories
+mkdir -p .github/workflows .github/scripts
+
+# Add CI workflow
+cat > .github/workflows/ci.yml <<'YML'
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+
+      - name: Make scripts executable
+        run: chmod +x .github/scripts/test.sh || true
+
+      - name: Run repository checks
+        run: .github/scripts/test.sh
+YML
+
+# Add test script (auto-detects languages and runs checks)
+cat > .github/scripts/test.sh <<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Detecting project type and running checks..."
+
+# Go checks
+if [[ -f go.mod ]]; then
+  echo "==> Detected Go project (go.mod found). Running go checks..."
+  gofmt -l .
+  go vet ./...
+  go test ./... -v -race -coverprofile=coverage.out
+  echo "Go checks completed."
+fi
+
+# Python checks
+if [[ -f requirements.txt ]] || [[ -f pyproject.toml ]] || [[ -f setup.py ]]; then
+  echo "==> Detected Python project. Running Python checks..."
+  python -m pip install --upgrade pip setuptools wheel || true
+  if [[ -f requirements.txt ]]; then
+    python -m pip install -r requirements.txt || true
+  fi
+  python -m pip install pytest black flake8 mypy || true
+  pytest -q || { echo "pytest failed"; exit 1; }
+  black --check . || { echo "black formatting issues"; exit 1; }
+  flake8 . || { echo "flake8 issues"; exit 1; }
+  mypy . || true
+  echo "Python checks completed."
+fi
+
+# Node / TypeScript checks
+if [[ -f package.json ]]; then
+  echo "==> Detected Node project. Running Node checks..."
+  if [[ -f package-lock.json ]]; then
+    npm ci || npm install
+  else
+    npm install || true
+  fi
+  if npm run | grep -q "test"; then
+    npm test || { echo "npm test failed"; exit 1; }
+  fi
+  if npm run | grep -q "lint"; then
+    npm run lint || { echo "npm lint failed"; exit 1; }
+  fi
+  if [[ -f tsconfig.json ]]; then
+    npx tsc --noEmit || true
+  fi
+  echo "Node checks completed."
+fi
+
+# Rust checks
+if [[ -f Cargo.toml ]]; then
+  echo "==> Detected Rust project. Running Rust checks..."
+  cargo fmt -- --check || true
+  cargo clippy --all-targets --all-features -- -D warnings || true
+  cargo test --all || { echo "cargo test failed"; exit 1; }
+  echo "Rust checks completed."
+fi
+
+echo "All detected checks completed."
+BASH
+
+# Make script executable
+chmod +x .github/scripts/test.sh
+
+# Add Makefile
+cat > Makefile <<'MAKE'
+.PHONY: all test lint ci
+
+all: ci
+
+test:
+	sh .github/scripts/test.sh
+
+lint:
+	sh .github/scripts/test.sh
+
+ci:
+	sh .github/scripts/test.sh
+MAKE
+
+# Append README section (creates README.md if missing)
+cat >> README.md <<'MD'
+
+## Testing & CI
+
+This repository includes a GitHub Actions workflow (.github/workflows/ci.yml) which auto-detects common project types (Go, Python, Node, Rust) and runs tests and linters.
+
+Locally:
+- Install your language dependencies (e.g. go mod download, pip install -r requirements.txt, npm ci).
+- Run tests and linters with:
+  make test
+or
+  sh .github/scripts/test.sh
+
+Notes:
+- If this repo is single-language (e.g., Go-only), you can ask me for a slimmer, optimized CI workflow (with caching and coverage upload).
+MD
+
+# Commit & push
+git add .github/workflows/ci.yml .github/scripts/test.sh Makefile README.md
+git commit -m "ci: add GitHub Actions workflow and test/lint scripts"
+git push --set-upstream origin "${BRANCH}"
+
+# Open PR to upstream main
+gh pr create --base main --head "${FORK_OWNER}:${BRANCH}" --title "Add CI and test/lint workflow" --body "Adds a GitHub Actions workflow that auto-detects common languages (Go, Python, Node, Rust) and runs tests and common linters. Includes .github/scripts/test.sh and Makefile for local runs."/n# GitHub Copilot CLI (Public Preview)
 
 The power of GitHub Copilot, now in your terminal.
 
