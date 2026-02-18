@@ -1,4 +1,46 @@
-/n
+# 1) Fork upstream to your account and clone your fork
+gh repo fork microsoft/winget-cli --clone --remote=true
+
+# If you already forked, clone your fork instead:
+# gh repo clone stomde/winget-cli
+
+cd winget-cli
+
+# 2) Add the original contributor repo as a remote and fetch the branch
+git remote add contrib https://github.com/MaxHorstmann/winget-cli.git
+git fetch contrib
+
+# 3) Create a branch in your local clone from the contributor branch
+# The contributor branch name is accept-agreements (head: MaxHorstmann:maxhorstmann/accept-agreements)
+git checkout -b stoma-accept-agreements contrib/accept-agreements
+
+# 4) Optional: make quick fixes (e.g., correct the Install-WinGetPackage.md typo)
+# Edit files as needed, for example:
+# sed -i 's/\[-AcceptSourceAgreements \[/<-AcceptSourceAgreements] [/' src/PowerShell/Help/Microsoft.WinGet.Client/Install-WinGetPackage.md
+# (Better: open the file in an editor and fix the malformed bracket line)
+
+# 5) Build / run relevant tests locally (recommended)
+# Example: build the solution (Windows/.NET dev environment needed)
+# dotnet build src/PowerShell/Microsoft.WinGet.Client.sln
+# and run tests (if any):
+# dotnet test <test-project.csproj> --configuration Release
+
+# 6) Commit any fixes you made (if you edited files)
+git add -A
+git commit -m "chore: import accept-agreements changes from MaxHorstmann/accept-agreements (fix docs typo)" || true
+# (If no changes were required, commit will be skipped; that's fine.)
+
+# 7) Push branch to your fork
+git push --set-upstream origin stoma-accept-agreements
+
+# 8) Create a PR from your fork to the upstream repo (target branch master)
+gh pr create --base master --head "stomde:stoma-accept-agreements" \
+  --title "[WIP?] Install-WinGetPackage: add AcceptPackageAgreements & AcceptSourceAgreements" \
+  --body "Import of changes from MaxHorstmann/accept-agreements (PR #5270). Adds two switches to accept package and source agreements. Marked draft in original PR — please review and complete CI/build checks.\n\nNotes:\n- I fixed a small docs syntax typo before opening this PR.\n- Please run CI and tests; I verified local build where possible."
+
+# 9) If you want the PR to be Ready for review (not draft), omit the --draft flag.
+# The gh command above creates a normal PR (not draft). If you prefer draft:
+# gh pr create ... --draft/n/n
 # === Edit only if needed ===
 UPSTREAM_OWNER="Mutigelink"
 UPSTREAM_REPO="copilot-sdk"
